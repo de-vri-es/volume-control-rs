@@ -1,0 +1,9 @@
+[package]
+name = "volume-control"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.0", features = ["derive"] }
+libpulse-binding = "2.28.1"
+notify-rust = { version = "4.10.0", default-features = false, features = ["zbus", "z"] }
