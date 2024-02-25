@@ -1,5 +1,5 @@
 [package]
-name = "volume-control"
+name = "volume-ctl"
 version = "0.0.0"
 edition = "2021"
 
