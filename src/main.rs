@@ -13,6 +13,17 @@ struct Options {
 
 #[derive(clap::Subcommand)]
 enum Command {
+	#[clap(flatten)]
+	Out(VolumeCommand),
+
+	Mic {
+		#[clap(subcommand)]
+		command: VolumeCommand,
+	}
+}
+
+#[derive(clap::Subcommand)]
+enum VolumeCommand {
 	Up {
 		value: f64,
 	},
@@ -77,70 +88,63 @@ fn do_main(options: Options) -> Result<(), ()> {
 	}
 
 	eprintln!("Context state: {:?}", context.get_state());
-
-	let mut volumes = get_volumes(&mut main_loop, &context)
-		.map_err(|e| eprintln!("Failed to get default sink information: {e}"))?;
-	let mut muted = get_muted(&mut main_loop, &context)
-		.map_err(|e| eprintln!("Failed to get muted state of default sink: {e}"))?;
-
 	match options.command {
-		Command::Up { value } => {
-			map_volumes(&mut volumes, |x| x + value);
-			set_volumes(&mut main_loop, &context, &volumes)
-				.map_err(|e| eprintln!("Failed to set volume: {e}"))?;
-		}
-		Command::Down { value} => {
-			map_volumes(&mut volumes, |x| x - value);
-			set_volumes(&mut main_loop, &context, &volumes)
-				.map_err(|e| eprintln!("Failed to set volume: {e}"))?;
-		},
-		Command::Set { value } => {
-			map_volumes(&mut volumes, |_| value);
-			set_volumes(&mut main_loop, &context, &volumes)
-				.map_err(|e| eprintln!("Failed to set volume: {e}"))?;
-		},
-		Command::Mute => {
-			muted = true;
-			set_muted(&mut main_loop, &context, muted)
-				.map_err(|e| eprintln!("Failed to mute volume: {e}"))?;
-		},
-		Command::Unmute => {
-			muted = false;
-			set_muted(&mut main_loop, &context, muted)
-				.map_err(|e| eprintln!("Failed to unmute volume: {e}"))?;
-		},
-		Command::ToggleMute => {
-			muted = !muted;
-			set_muted(&mut main_loop, &context, muted)
-				.map_err(|e| eprintln!("Failed to mute/unmute volume: {e}"))?;
-		},
+		Command::Out(command) => run_output_command(&mut main_loop, &context, command),
+		Command::Mic { command } => run_input_command(&mut main_loop, &context, command),
 	}
+}
 
-	let max_volume = volume_to_percentage(volumes.max());
-	let mut notification = Notification::new();
-	if muted {
-		notification.summary(&format!("Volume: muted ({:.0}%)", max_volume));
-	} else {
-		notification.summary(&format!("Volume: {:.0}%", max_volume));
-	}
-	if muted {
-		notification.icon("audio-volume-muted");
-	} else if max_volume <= 100.0 / 3.0 {
-		notification.icon("audio-volume-low");
-	} else if max_volume < 100.0 * 2.0 / 3.0 {
-		notification.icon("audio-volume-medium");
-	} else {
-		notification.icon("audio-volume-high");
-	}
-	notification.id(0x49adff07);
-	notification.hint(notify_rust::Hint::CustomInt("value".to_owned(), max_volume.round() as i32));
-	notification.hint(notify_rust::Hint::CustomInt("progress".to_owned(), max_volume.round() as i32));
-	notification.hint(notify_rust::Hint::Custom("progress-label".to_owned(), "volume".to_owned()));
-	notification.show()
-		.map_err(|e| eprintln!("Failed to show notification: {e}"))
-		.ok();
+fn run_output_command(main_loop: &mut Mainloop, context: &Context, command: VolumeCommand) -> Result<(), ()> {
+	let mut volumes = get_output_volumes(main_loop, context)
+		.map_err(|e| eprintln!("Failed to get output volume: {e}"))?;
+
+	apply_volume_command(&mut volumes, &command);
+
+	set_output_volumes(main_loop, context, &volumes.channels)
+		.map_err(|e| eprintln!("Failed to set output volume: {e}"))?;
+	set_output_muted(main_loop, context, volumes.muted)
+		.map_err(|e| eprintln!("Failed to mute/unmute output volume: {e}"))?;
+
+	show_notification("Volume", "audio-volume", 0x49adff07, &volumes);
 
 	Ok(())
+}
+
+fn run_input_command(main_loop: &mut Mainloop, context: &Context, command: VolumeCommand) -> Result<(), ()> {
+	let mut volumes = get_input_volumes(main_loop, context)
+		.map_err(|e| eprintln!("Failed to get input volume: {e}"))?;
+	apply_volume_command(&mut volumes, &command);
+	set_input_volumes(main_loop, context, &volumes.channels)
+		.map_err(|e| eprintln!("Failed to set input volume: {e}"))?;
+	set_input_muted(main_loop, context, volumes.muted)
+		.map_err(|e| eprintln!("Failed to mute/unmute input volume: {e}"))?;
+
+	show_notification("Microphone", "microphone-sensitivity", 0x49adff08, &volumes);
+
+	Ok(())
+}
+
+fn apply_volume_command(volumes: &mut Volumes, command: &VolumeCommand) {
+	match command {
+		VolumeCommand::Up { value } => {
+			map_volumes(&mut volumes.channels, |x| x + value);
+		}
+		VolumeCommand::Down { value} => {
+			map_volumes(&mut volumes.channels, |x| x - value);
+		},
+		VolumeCommand::Set { value } => {
+			map_volumes(&mut volumes.channels, |_| *value);
+		},
+		VolumeCommand::Mute => {
+			volumes.muted = true;
+		},
+		VolumeCommand::Unmute => {
+			volumes.muted = false;
+		},
+		VolumeCommand::ToggleMute => {
+			volumes.muted = !volumes.muted;
+		},
+	}
 }
 
 fn volume_to_percentage(volume: Volume) -> f64 {
@@ -161,12 +165,20 @@ fn map_volumes<F: FnMut(f64) -> f64>(volumes: &mut ChannelVolumes, mut action: F
 	}
 }
 
-fn get_volumes(main_loop: &mut Mainloop, context: &Context) -> Result<ChannelVolumes, PAErr> {
+struct Volumes {
+	muted: bool,
+	pub channels: ChannelVolumes,
+}
+
+fn get_output_volumes(main_loop: &mut Mainloop, context: &Context) -> Result<Volumes, PAErr> {
 	run(main_loop, move |output| {
 		context.introspect().get_sink_info_by_name("@DEFAULT_SINK@", move |info| {
 			match info {
 				libpulse_binding::callbacks::ListResult::Item(x) => {
-					*output.lock().unwrap() = Some(Ok(x.volume));
+					*output.lock().unwrap() = Some(Ok(Volumes {
+						muted: x.mute,
+						channels: x.volume,
+					}));
 				},
 				libpulse_binding::callbacks::ListResult::End => {
 				},
@@ -179,7 +191,7 @@ fn get_volumes(main_loop: &mut Mainloop, context: &Context) -> Result<ChannelVol
 	.map_err(|()| context.errno())
 }
 
-fn set_volumes(main_loop: &mut Mainloop, context: &Context, volumes: &ChannelVolumes) -> Result<(), PAErr> {
+fn set_output_volumes(main_loop: &mut Mainloop, context: &Context, volumes: &ChannelVolumes) -> Result<(), PAErr> {
 	run(main_loop, move |output| {
 		context.introspect().set_sink_volume_by_name("@DEFAULT_SINK@", volumes, Some(Box::new(move |success| {
 			if success {
@@ -192,12 +204,28 @@ fn set_volumes(main_loop: &mut Mainloop, context: &Context, volumes: &ChannelVol
 	.map_err(|()| context.errno())
 }
 
-fn get_muted(main_loop: &mut Mainloop, context: &Context) -> Result<bool, PAErr> {
+fn set_output_muted(main_loop: &mut Mainloop, context: &Context, muted: bool) -> Result<(), PAErr> {
 	run(main_loop, move |output| {
-		context.introspect().get_sink_info_by_name("@DEFAULT_SINK@", move |info| {
+		context.introspect().set_sink_mute_by_name("@DEFAULT_SINK@", muted, Some(Box::new(move |success| {
+			if success {
+				*output.lock().unwrap() = Some(Ok(()));
+			} else {
+				*output.lock().unwrap() = Some(Err(()));
+			}
+		})));
+	})?
+	.map_err(|()| context.errno())
+}
+
+fn get_input_volumes(main_loop: &mut Mainloop, context: &Context) -> Result<Volumes, PAErr> {
+	run(main_loop, move |output| {
+		context.introspect().get_source_info_by_name("@DEFAULT_SOURCE@", move |info| {
 			match info {
 				libpulse_binding::callbacks::ListResult::Item(x) => {
-					*output.lock().unwrap() = Some(Ok(x.mute));
+					*output.lock().unwrap() = Some(Ok(Volumes {
+						muted: x.mute,
+						channels: x.volume,
+					}));
 				},
 				libpulse_binding::callbacks::ListResult::End => {
 				},
@@ -210,10 +238,22 @@ fn get_muted(main_loop: &mut Mainloop, context: &Context) -> Result<bool, PAErr>
 	.map_err(|()| context.errno())
 }
 
-fn set_muted(main_loop: &mut Mainloop, context: &Context, muted: bool) -> Result<(), PAErr> {
+fn set_input_volumes(main_loop: &mut Mainloop, context: &Context, volumes: &ChannelVolumes) -> Result<(), PAErr> {
 	run(main_loop, move |output| {
-		context.introspect().set_sink_mute_by_name("@DEFAULT_SINK@", muted, Some(Box::new(move |success| {
-			eprintln!("set_sink_mute_by_name({muted}): {success}");
+		context.introspect().set_source_volume_by_name("@DEFAULT_SOURCE@", volumes, Some(Box::new(move |success| {
+			if success {
+				*output.lock().unwrap() = Some(Ok(()));
+			} else {
+				*output.lock().unwrap() = Some(Err(()));
+			}
+		})));
+	})?
+	.map_err(|()| context.errno())
+}
+
+fn set_input_muted(main_loop: &mut Mainloop, context: &Context, muted: bool) -> Result<(), PAErr> {
+	run(main_loop, move |output| {
+		context.introspect().set_source_mute_by_name("@DEFAULT_SOURCE@", muted, Some(Box::new(move |success| {
 			if success {
 				*output.lock().unwrap() = Some(Ok(()));
 			} else {
@@ -267,4 +307,28 @@ where
 			IterateResult::Success(_iterations) => (),
 		}
 	}
+}
+
+fn show_notification(name: &str, icon_prefix: &str, id: u32, volumes: &Volumes) {
+	let max_volume = volume_to_percentage(volumes.channels.max());
+	let mut notification = Notification::new();
+	if volumes.muted {
+		notification.summary(&format!("{name}: muted ({max_volume:.0}%)"));
+	} else {
+		notification.summary(&format!("{name}: {max_volume:.0}%"));
+	}
+	if volumes.muted {
+		notification.icon(&format!("{icon_prefix}-muted"));
+	} else if max_volume <= 100.0 / 3.0 {
+		notification.icon(&format!("{icon_prefix}-low"));
+	} else if max_volume < 100.0 * 2.0 / 3.0 {
+		notification.icon(&format!("{icon_prefix}-medium"));
+	} else {
+		notification.icon(&format!("{icon_prefix}-high"));
+	}
+	notification.id(id);
+	notification.hint(notify_rust::Hint::CustomInt("value".to_owned(), max_volume.round() as i32));
+	notification.show()
+		.map_err(|e| eprintln!("Failed to show notification: {e}"))
+		.ok();
 }
