@@ -1,6 +1,13 @@
 [package]
 name = "volume-ctl"
 version = "0.0.0"
+description = "command line tool to control PulseAudio volume"
+license = "BSD-2-Clause"
+repository = "https://github.com/volume-ctl"
+documentation = "https://docs.rs/volume-ctl"
+keywords = ["volume", "control", "commmand-line"]
+categories = ["command-line-utilities"]
+
 edition = "2021"
 
 [features]
