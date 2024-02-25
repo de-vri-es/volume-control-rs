@@ -1,6 +1,6 @@
 # volume-ctl
 
-Dead simple CLI utility to control the volume of your PulseAudio or PipeWire sound server.
+Dead simple command line utility to control the volume of your PulseAudio or PipeWire sound server.
 
 ## Features
 
@@ -9,3 +9,11 @@ Dead simple CLI utility to control the volume of your PulseAudio or PipeWire sou
   * Notifications include a progress bar if the notification daemon supports it!
 
 ## Usage
+
+Usage information is available by running the program with the `--help` flag.
+
+```sh
+volume-ctl --help
+```
+
+License: BSD-2-Clause
