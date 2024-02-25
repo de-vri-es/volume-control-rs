@@ -8,6 +8,7 @@ documentation = "https://docs.rs/volume-ctl"
 keywords = ["volume", "control", "commmand-line"]
 categories = ["command-line-utilities"]
 
+publish = ["crates-io"]
 edition = "2021"
 
 [features]
