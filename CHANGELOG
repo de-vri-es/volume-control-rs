@@ -1,3 +1,6 @@
+# Unreleased
+- [change][minor] Use symbolic versions of notification icons.
+
 # Version 0.1.1 - 2024-02-25
 - [add][minor] Add `output get` and `input get` command.
 

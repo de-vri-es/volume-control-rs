@@ -418,13 +418,13 @@ fn show_notification(name: &str, icon_prefix: &str, id: u32, volumes: &Volumes) 
 		notification.summary(&format!("{name}: {max_volume:.0}%"));
 	}
 	if volumes.muted {
-		notification.icon(&format!("{icon_prefix}-muted"));
+		notification.icon(&format!("{icon_prefix}-muted-symbolic"));
 	} else if max_volume <= 100.0 / 3.0 {
-		notification.icon(&format!("{icon_prefix}-low"));
+		notification.icon(&format!("{icon_prefix}-low-symbolic"));
 	} else if max_volume < 100.0 * 2.0 / 3.0 {
-		notification.icon(&format!("{icon_prefix}-medium"));
+		notification.icon(&format!("{icon_prefix}-medium-symbolic"));
 	} else {
-		notification.icon(&format!("{icon_prefix}-high"));
+		notification.icon(&format!("{icon_prefix}-high-symbolic"));
 	}
 	notification.id(id);
 	notification.hint(notify_rust::Hint::CustomInt("value".to_owned(), max_volume.round() as i32));
