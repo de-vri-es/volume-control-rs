@@ -77,6 +77,8 @@ enum VolumeCommand {
 		#[clap(value_name = "PERCENTAGE")]
 		value: f64,
 	},
+	/// Print the current volume.
+	Get,
 	/// Toggle between muted and unmuted.
 	ToggleMute,
 	/// Mute the volume.
@@ -114,6 +116,12 @@ fn run_output_command(main_loop: &mut Mainloop, context: &Context, command: Volu
 	let mut volumes = get_output_volumes(main_loop, context)
 		.map_err(|e| log::error!("Failed to get output volume: {e}"))?;
 
+	if let VolumeCommand::Get = &command {
+		let max = volume_to_percentage(volumes.channels.max());
+		println!("{max:.0}");
+		return Ok(())
+	}
+
 	apply_volume_command(&mut volumes, &command);
 
 	set_output_volumes(main_loop, context, &volumes.channels)
@@ -130,7 +138,15 @@ fn run_output_command(main_loop: &mut Mainloop, context: &Context, command: Volu
 fn run_input_command(main_loop: &mut Mainloop, context: &Context, command: VolumeCommand) -> Result<(), ()> {
 	let mut volumes = get_input_volumes(main_loop, context)
 		.map_err(|e| log::error!("Failed to get input volume: {e}"))?;
+
+	if let VolumeCommand::Get = &command {
+		let max = volume_to_percentage(volumes.channels.max());
+		println!("{max:.0}");
+		return Ok(())
+	}
+
 	apply_volume_command(&mut volumes, &command);
+
 	set_input_volumes(main_loop, context, &volumes.channels)
 		.map_err(|e| log::error!("Failed to set input volume: {e}"))?;
 	set_input_muted(main_loop, context, volumes.muted)
@@ -162,6 +178,7 @@ fn apply_volume_command(volumes: &mut Volumes, command: &VolumeCommand) {
 		VolumeCommand::ToggleMute => {
 			volumes.muted = !volumes.muted;
 		},
+		VolumeCommand::Get => (),
 	}
 }
 

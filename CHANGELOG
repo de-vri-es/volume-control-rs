@@ -1,2 +1,5 @@
+# Unreleased
+- [add][minor] Add `output get` and `input get` command.
+
 # Version 0.1.0 - 2024-02-25
-- [major][add] Initial release
+- [add][major] Initial release
