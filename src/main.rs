@@ -5,7 +5,9 @@ use libpulse_binding::volume::{ChannelVolumes, Volume};
 use std::sync::{Mutex, Arc};
 use notify_rust::Notification;
 
+/// Control the volume of your PulseAudio/PipeWire sound server.
 #[derive(clap::Parser)]
+#[clap(styles = clap_style())]
 struct Options {
 	#[clap(subcommand)]
 	command: Command,
@@ -13,10 +15,14 @@ struct Options {
 
 #[derive(clap::Subcommand)]
 enum Command {
-	#[clap(flatten)]
-	Out(VolumeCommand),
+	/// Control the volume of your output device (speakers, headphones, ...).
+	Output {
+		#[clap(subcommand)]
+		command: VolumeCommand,
+	},
 
-	Mic {
+	/// Control the volume of your input device (microphone, ...).
+	Input {
 		#[clap(subcommand)]
 		command: VolumeCommand,
 	}
@@ -24,18 +30,30 @@ enum Command {
 
 #[derive(clap::Subcommand)]
 enum VolumeCommand {
+	/// Increase the volume by the given percentage.
 	Up {
+		/// The percentage to increase the volume by.
+		#[clap(value_name = "PERCENTAGE")]
 		value: f64,
 	},
+	/// Decrease the volume by the given percentage.
 	Down {
+		/// The percentage to decrease the volume by.
+		#[clap(value_name = "PERCENTAGE")]
 		value: f64,
 	},
+	/// Set the volume to the given percentage.
 	Set {
+		/// The percentage to set the volume to.
+		#[clap(value_name = "PERCENTAGE")]
 		value: f64,
 	},
-	Mute,
-	Unmute,
+	/// Toggle between muted and unmuted.
 	ToggleMute,
+	/// Mute the volume.
+	Mute,
+	/// Unmute the volume.
+	Unmute,
 }
 
 fn main() {
@@ -89,8 +107,8 @@ fn do_main(options: Options) -> Result<(), ()> {
 
 	eprintln!("Context state: {:?}", context.get_state());
 	match options.command {
-		Command::Out(command) => run_output_command(&mut main_loop, &context, command),
-		Command::Mic { command } => run_input_command(&mut main_loop, &context, command),
+		Command::Output { command } => run_output_command(&mut main_loop, &context, command),
+		Command::Input { command } => run_input_command(&mut main_loop, &context, command),
 	}
 }
 
@@ -331,4 +349,13 @@ fn show_notification(name: &str, icon_prefix: &str, id: u32, volumes: &Volumes) 
 	notification.show()
 		.map_err(|e| eprintln!("Failed to show notification: {e}"))
 		.ok();
+}
+
+fn clap_style() -> clap::builder::Styles {
+	use clap::builder::styling::AnsiColor;
+	clap::builder::Styles::styled()
+		.header(AnsiColor::Yellow.on_default())
+		.usage(AnsiColor::Green.on_default())
+		.literal(AnsiColor::Green.on_default())
+		.placeholder(AnsiColor::Green.on_default())
 }
