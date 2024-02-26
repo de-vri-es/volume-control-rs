@@ -18,7 +18,7 @@ dbus = ["notify-rust/dbus"]
 
 [dependencies]
 clap = { version = "4.5.0", features = ["derive"] }
-env_logger = "0.11.2"
+env_logger = { version = "0.11.2", default-features = false, features = ["color", "auto-color"] }
 libpulse-binding = "2.28.1"
 log = "0.4.20"
 notify-rust = { version = "4.10.0", default-features = false }
