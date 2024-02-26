@@ -1,4 +1,4 @@
-# Unreleased
+# Version 0.1.4 - 2024-02-26
 - [change][patch] Remove unused features of `env_logger` for faster compilation.
 
 # Version 0.1.3 - 2024-02-26
